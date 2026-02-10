@@ -17,8 +17,8 @@ class Target:
 
     def __init__(self, x, y, w, h, cls):
         # 使用实时的配置值，确保配置变更时能立即生效
-        self.x = x
-        self.y = y - cfg.aim_body_y_offset * h
+        self.x = x + cfg.aim_body_x_offset * h * 0.5
+        self.y = y + cfg.aim_body_y_offset * h * 0.5
         self.w = w
         self.h = h
         self.cls = cls

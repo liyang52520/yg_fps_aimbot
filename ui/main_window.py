@@ -85,22 +85,20 @@ class MainWindow(QMainWindow):
         self.aim_config_tab = AimConfigTab()
         self.tab_widget.addTab(self.aim_config_tab, "瞄准配置")
 
+        # 连接配置变化信号
+        self._connect_config_signals()
+
     def _create_button_layout(self):
         """创建底部按钮布局"""
         button_layout = QHBoxLayout()
         button_layout.setContentsMargins(0, 10, 0, 0)
         button_layout.setSpacing(10)
 
-        self.apply_button = QPushButton("应用配置")
-        self.apply_button.setStyleSheet(Styles.get_button_style(primary=False))
-        self.apply_button.clicked.connect(self._apply_config)
-
         self.save_button = QPushButton("保存配置")
         self.save_button.setStyleSheet(Styles.get_button_style(primary=True))
         self.save_button.clicked.connect(self._save_config)
 
         button_layout.addStretch()
-        button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.save_button)
 
         return button_layout
@@ -144,22 +142,48 @@ class MainWindow(QMainWindow):
         if not self.config_manager.load_config(ui_components):
             QMessageBox.warning(self, "警告", "配置文件不存在，将使用默认值")
 
-    def _apply_config(self):
-        """应用配置，不保存到文件"""
-        original_text = self.apply_button.text()
-        self.apply_button.setText("应用中...")
-        self.apply_button.setEnabled(False)
-
-        QApplication.processEvents()
-
+    def auto_apply_config(self):
+        """自动应用配置，不保存到文件"""
         try:
             ui_components = self._get_ui_components()
             self.config_manager.apply_config_to_memory(ui_components)
-            print("配置已应用")
-        finally:
-            self.apply_button.setText(original_text)
-            self.apply_button.setEnabled(True)
-            QApplication.processEvents()
+        except Exception as e:
+            print(f"自动应用配置失败: {e}")
+
+    def _connect_config_signals(self):
+        """连接所有配置组件的信号到自动应用配置"""
+        # AI配置信号
+        self.ai_config_tab.ai_model_name.currentTextChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.ai_model_image_size.valueChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.ai_conf.valueChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.ai_device.valueChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.ai_tracker.stateChanged.connect(self.auto_apply_config)
+        
+        # 捕获配置信号
+        self.ai_config_tab.capture_window_width.valueChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.capture_window_height.valueChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.capture_fps.valueChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.capture_circle.stateChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.capture_ai_debug.stateChanged.connect(self.auto_apply_config)
+        
+        # 瞄准配置信号
+        self.aim_config_tab.auto.stateChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.aim_mode.currentTextChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.target_cls.currentTextChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.body_x_offset.valueChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.body_y_offset.valueChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.hotkeys.selectionChanged.connect(self.auto_apply_config)
+        
+        # 鼠标配置信号
+        self.aim_config_tab.mouse_move.currentTextChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.mouse_dpi.valueChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.mouse_sensitivity.valueChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.mouse_fov_width.valueChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.mouse_fov_height.valueChanged.connect(self.auto_apply_config)
+        
+        # ViGEmBus配置信号
+        self.aim_config_tab.move_scope.valueChanged.connect(self.auto_apply_config)
+        self.aim_config_tab.move_sleep.valueChanged.connect(self.auto_apply_config)
 
     def _save_config(self):
         """保存配置文件"""
