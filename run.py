@@ -22,18 +22,8 @@ from core.frame_parser import frameParser
 from core.logger import setup_logger
 from ui.main_window import MainWindow
 
-# 创建日志信号类
-class LogSignal(QObject):
-    log = pyqtSignal(str)
-
-# 创建图像信号类
-class ImageSignal(QObject):
-    image = pyqtSignal(object)
-
-# 创建全局日志信号实例
-log_signal = LogSignal()
-# 创建全局图像信号实例
-image_signal = ImageSignal()
+# 从signals.py导入信号实例
+from core.signals import log_signal, image_signal
 
 # 创建全局停止事件
 stop_event = threading.Event()
@@ -116,6 +106,10 @@ class Aimbot:
         self.toggle_aim_enabled = False
         # 热键状态跟踪，用于检测按键按下事件
         self.key_states = {}
+        # 用于计算瞬时帧率的变量
+        self.capture_times = []  # 保存最近的采集时间
+        self.prediction_times = []  # 保存最近的预测时间
+        self.max_time_history = 10  # 保存最近10个时间点
 
     def _get_current_config(self):
         """获取当前配置快照"""
@@ -188,11 +182,17 @@ class Aimbot:
                     self._check_config_changes()
                     last_config_check_time = current_time
 
-                # 获取图像
+                # 获取图像并记录时间
+                current_capture_time = time.time()
                 image = capture.get_new_frame()
                 if image is None:
                     await asyncio.sleep(0.0001)
                     continue
+
+                # 记录采集时间
+                self.capture_times.append(current_capture_time)
+                if len(self.capture_times) > self.max_time_history:
+                    self.capture_times.pop(0)
 
                 # 性能统计
                 frame_count += 1
@@ -200,10 +200,29 @@ class Aimbot:
                 # 发送图像到GUI（当capture_ai_debug开启时）
                 if cfg.capture_ai_debug:
                     image_signal.image.emit(image)
+                
+                # 定期计算并发送瞬时帧率
+                if current_time - last_print_time >= 0.1:
+                    # 计算瞬时采集帧率
+                    if len(self.capture_times) >= 2:
+                        capture_time_diff = self.capture_times[-1] - self.capture_times[0]
+                        if capture_time_diff > 0:
+                            instant_capture_fps = (len(self.capture_times) - 1) / capture_time_diff
+                            image_signal.capture_fps.emit(instant_capture_fps)
+                    else:
+                        image_signal.capture_fps.emit(0.0)
+                    
+                    # 计算瞬时预测帧率
+                    if len(self.prediction_times) >= 2:
+                        predict_time_diff = self.prediction_times[-1] - self.prediction_times[0]
+                        if predict_time_diff > 0:
+                            instant_predict_fps = (len(self.prediction_times) - 1) / predict_time_diff
+                            image_signal.predict_fps.emit(instant_predict_fps)
+                    else:
+                        image_signal.predict_fps.emit(0.0)
 
-                # 打印性能统计
+                # 清除性能统计，不再打印
                 if current_time - last_print_time >= 10:
-                    self._print_performance(frame_count, prediction_count, start_time, current_time)
                     frame_count = 0
                     prediction_count = 0
                     start_time = current_time
@@ -218,10 +237,18 @@ class Aimbot:
 
                 # 执行预测
                 if need_prediction:
+                    # 记录预测开始时间
+                    predict_start_time = time.time()
                     result = await asyncio.get_event_loop().run_in_executor(
                         self.executor, perform_detection, self.model, image, tracker
                     )
+                    predict_end_time = time.time()
                     prediction_count += 1
+
+                    # 记录预测时间
+                    self.prediction_times.append(predict_end_time)
+                    if len(self.prediction_times) > self.max_time_history:
+                        self.prediction_times.pop(0)
 
                     # 解析结果
                     await asyncio.get_event_loop().run_in_executor(
@@ -358,6 +385,10 @@ class Aimbot:
                     return True
 
         # 默认不预测
+        # 当自瞄关闭时，发送信号清零预测帧率并清空预测时间记录
+        image_signal.clear_predict_fps.emit()
+        # 清空预测时间记录，这样下次开启自瞄时会立即计算帧率
+        self.prediction_times.clear()
         return False
 
 # 全局Aimbot实例

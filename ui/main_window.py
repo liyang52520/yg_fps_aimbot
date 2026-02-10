@@ -39,6 +39,15 @@ class MainWindow(QMainWindow):
         self.log_capture = LogCapture()
         self.log_capture.log_signal.connect(self.append_log)
 
+        # 连接图像信号
+        try:
+            from core.signals import image_signal
+            image_signal.capture_fps.connect(self.update_capture_fps)
+            image_signal.predict_fps.connect(self.update_predict_fps)
+            image_signal.clear_predict_fps.connect(self.clear_predict_fps)
+        except ImportError:
+            pass
+
     def _setup_theme(self):
         """设置主题样式 - IDEA Light风格"""
         palette = QPalette()
@@ -150,6 +159,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"自动应用配置失败: {e}")
 
+    def _on_video_debug_changed(self, state):
+        """当视频监控复选框状态变化时的处理"""
+        # 应用配置
+        self.auto_apply_config()
+        # 如果视频监控被关闭，清除最后一帧
+        if state == 0:
+            self.ai_config_tab.clear_video()
+
     def _connect_config_signals(self):
         """连接所有配置组件的信号到自动应用配置"""
         # AI配置信号
@@ -164,7 +181,7 @@ class MainWindow(QMainWindow):
         self.ai_config_tab.capture_window_height.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.capture_fps.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.capture_circle.stateChanged.connect(self.auto_apply_config)
-        self.ai_config_tab.capture_ai_debug.stateChanged.connect(self.auto_apply_config)
+        self.ai_config_tab.capture_ai_debug.stateChanged.connect(self._on_video_debug_changed)
         
         # 瞄准配置信号
         self.aim_config_tab.auto.stateChanged.connect(self.auto_apply_config)
@@ -210,3 +227,15 @@ class MainWindow(QMainWindow):
     def update_video(self, image):
         """更新视频监控区域"""
         self.ai_config_tab.update_video(image)
+
+    def update_capture_fps(self, fps):
+        """更新采集帧率"""
+        self.ai_config_tab.update_capture_fps(fps)
+
+    def update_predict_fps(self, fps):
+        """更新预测帧率"""
+        self.ai_config_tab.update_predict_fps(fps)
+
+    def clear_predict_fps(self):
+        """清零预测帧率"""
+        self.ai_config_tab.clear_predict_fps()

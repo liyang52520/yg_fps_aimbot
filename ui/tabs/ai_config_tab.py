@@ -17,6 +17,15 @@ class AIConfigTab(QWidget):
         super().__init__(parent)
         self.video_label = None
         self.log_text_edit = None
+        self.fps_labels = None
+        self.calculated_capture_fps = 0.0
+        self.calculated_predict_fps = 0.0
+        self.last_capture_time = 0.0
+        self.last_predict_time = 0.0
+        # 移动平均计算
+        self.capture_fps_history = []
+        self.predict_fps_history = []
+        self.max_history = 10  # 保存10个最近的帧率值
         self._setup_ui()
 
     def _setup_ui(self):
@@ -64,11 +73,35 @@ class AIConfigTab(QWidget):
         video_display.setMinimumHeight(200)
         video_display.setStyleSheet(Styles.get_video_display_style())
         video_display_layout = QVBoxLayout(video_display)
+        video_display_layout.setContentsMargins(0, 0, 0, 0)
+        video_display_layout.setSpacing(0)
 
-        self.video_label = QLabel("视频监控区域（预留）")
+        # 视频显示区域
+        self.video_label = QLabel("视频监控区域")
         self.video_label.setStyleSheet("color: #999999;")
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        video_display_layout.addWidget(self.video_label)
+        video_display_layout.addWidget(self.video_label, 1)
+
+        # 帧率显示区域
+        fps_widget = QWidget()
+        fps_widget.setStyleSheet("background-color: rgba(0, 0, 0, 0.7); color: white;")
+        fps_layout = QHBoxLayout(fps_widget)
+        fps_layout.setContentsMargins(8, 4, 8, 4)
+        fps_layout.setSpacing(20)
+
+        # 采集帧率
+        capture_fps_label = QLabel("采集帧率: 0.0 FPS")
+        capture_fps_label.setStyleSheet("color: #4CAF50;")
+        fps_layout.addWidget(capture_fps_label)
+
+        # 预测帧率
+        predict_fps_label = QLabel("预测帧率: 0.0 FPS")
+        predict_fps_label.setStyleSheet("color: #2196F3;")
+        fps_layout.addWidget(predict_fps_label)
+
+        self.fps_labels = (capture_fps_label, predict_fps_label)
+        video_display_layout.addWidget(fps_widget)
+
         video_layout.addWidget(video_display)
 
         return video_widget
@@ -347,11 +380,14 @@ class AIConfigTab(QWidget):
         """更新视频监控区域"""
         from PyQt6.QtGui import QPixmap, QImage
         import cv2
+        import time
 
         if image is None or self.video_label is None:
             return
 
         try:
+            # 帧率计算现在通过run.py中的信号获取，这里不再计算
+
             if len(image.shape) == 3:
                 rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
@@ -366,3 +402,47 @@ class AIConfigTab(QWidget):
                 self.video_label.setText("")
         except Exception:
             pass
+
+    def clear_video(self):
+        """清除视频监控区域的最后一帧"""
+        if self.video_label:
+            self.video_label.clear()
+            self.video_label.setText("视频监控区域")
+            self.video_label.setStyleSheet("color: #999999;")
+
+    def update_capture_fps(self, fps):
+        """更新采集帧率显示（使用移动平均）"""
+        # 添加到历史记录
+        self.capture_fps_history.append(fps)
+        # 保持历史记录长度
+        if len(self.capture_fps_history) > self.max_history:
+            self.capture_fps_history.pop(0)
+        # 计算移动平均
+        avg_fps = sum(self.capture_fps_history) / len(self.capture_fps_history)
+        # 更新显示
+        if self.fps_labels:
+            capture_fps_label, _ = self.fps_labels
+            capture_fps_label.setText(f"采集帧率: {avg_fps:.1f} FPS")
+
+    def update_predict_fps(self, fps):
+        """更新预测帧率显示（使用移动平均）"""
+        # 添加到历史记录
+        self.predict_fps_history.append(fps)
+        # 保持历史记录长度
+        if len(self.predict_fps_history) > self.max_history:
+            self.predict_fps_history.pop(0)
+        # 计算移动平均
+        avg_fps = sum(self.predict_fps_history) / len(self.predict_fps_history)
+        # 更新显示
+        if self.fps_labels:
+            _, predict_fps_label = self.fps_labels
+            predict_fps_label.setText(f"预测帧率: {avg_fps:.1f} FPS")
+
+    def clear_predict_fps(self):
+        """清零预测帧率显示"""
+        # 清空历史记录
+        self.predict_fps_history.clear()
+        # 更新显示
+        if self.fps_labels:
+            _, predict_fps_label = self.fps_labels
+            predict_fps_label.setText("预测帧率: 0.0 FPS")
