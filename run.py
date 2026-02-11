@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 
 import supervision as sv
 import torch
@@ -53,43 +54,57 @@ logger.addHandler(gui_handler)
 tracker = sv.ByteTrack() if cfg.ai_tracker else None
 
 
+# 全局检测参数，避免重复创建
+detection_kwargs = {
+    'iou': 0.45,
+    'agnostic_nms': False,
+    'augment': False,
+    'vid_stride': False,
+    'visualize': False,
+    'verbose': False,
+    'show_boxes': False,
+    'show_labels': False,
+    'show_conf': False,
+    'save': False,
+    'show': False,
+    'batch': False,
+    'retina_masks': False,
+    'classes': None,
+    'simplify': True,
+    'cfg': "config/tracker.yaml"
+}
+
+
 def perform_detection(model, image, tracker=None):
     """执行目标检测"""
-    kwargs = {
-        'source': image,
-        'imgsz': cfg.ai_model_image_size,
-        'conf': cfg.ai_conf,
-        'iou': 0.45,
-        'device': cfg.ai_device,
-        'half': not "cpu" in cfg.ai_device,
-        'max_det': 8,
-        'agnostic_nms': False,
-        'augment': False,
-        'vid_stride': False,
-        'visualize': False,
-        'verbose': False,
-        'show_boxes': False,
-        'show_labels': False,
-        'show_conf': False,
-        'save': False,
-        'show': False,
-        'stream': True,
-        'batch': False,
-        'retina_masks': False,
-        'classes': None,
-        'simplify': True,
-        'cfg': "config/tracker.yaml"
-    }
+    try:
+        # 动态更新必要的参数
+        kwargs = detection_kwargs.copy()
+        kwargs.update({
+            'source': image,
+            'imgsz': cfg.ai_model_image_size,
+            'conf': cfg.ai_conf,
+            'device': cfg.ai_device,
+            'half': cfg.ai_device != "cpu",
+            'max_det': 8,
+            'stream': bool(tracker)
+        })
 
-    results = model.predict(**kwargs)
+        results = model.predict(**kwargs)
 
-    if tracker:
-        for res in results:
-            det = sv.Detections.from_ultralytics(res)
-            return tracker.update_with_detections(det)
+        if tracker:
+            for res in results:
+                det = sv.Detections.from_ultralytics(res)
+                return tracker.update_with_detections(det)
+            return None
+        else:
+            # 非stream模式直接返回结果
+            return results[0]
+    except Exception as e:
+        # 减少日志开销
+        if cfg.capture_ai_debug:
+            logger.error(f"检测错误: {e}")
         return None
-    else:
-        return next(results)
 
 
 class Aimbot:
@@ -107,9 +122,24 @@ class Aimbot:
         # 热键状态跟踪，用于检测按键按下事件
         self.key_states = {}
         # 用于计算瞬时帧率的变量
-        self.capture_times = []  # 保存最近的采集时间
-        self.prediction_times = []  # 保存最近的预测时间
-        self.max_time_history = 10  # 保存最近10个时间点
+        self.capture_times = deque(maxlen=30)  # 使用deque，提高性能
+        self.prediction_times = deque(maxlen=30)  # 增加时间点保存数量
+        self.config_check_interval = 0.2  # 进一步降低配置检查频率
+        self.last_config_check_time = 0
+        self.last_fps_update_time = 0
+        self.fps_update_interval = 0.03  # 进一步提高帧率更新频率
+        
+        # 缓存的热键代码
+        self.cached_hotkey_codes = []
+        self._cache_hotkey_codes()
+
+    def _cache_hotkey_codes(self):
+        """缓存热键代码，避免重复查找"""
+        self.cached_hotkey_codes = []
+        for key_name in cfg.aim_hotkeys:
+            key_code = Buttons.KEY_CODES.get(key_name.strip())
+            if key_code:
+                self.cached_hotkey_codes.append(key_code)
 
     def _get_current_config(self):
         """获取当前配置快照"""
@@ -129,6 +159,7 @@ class Aimbot:
             'aim_body_x_offset': cfg.aim_body_x_offset,
             'aim_body_y_offset': cfg.aim_body_y_offset,
             'aim_hotkeys': cfg.aim_hotkeys.copy(),
+            'aim_mode': cfg.aim_mode,
             'mouse_move': cfg.mouse_move,
             'mouse_dpi': cfg.mouse_dpi,
             'mouse_sensitivity': cfg.mouse_sensitivity,
@@ -146,15 +177,23 @@ class Aimbot:
             import numpy as np
             dummy_image = np.zeros((cfg.ai_model_image_size, cfg.ai_model_image_size, 3), dtype=np.uint8)
             perform_detection(self.model, dummy_image, tracker)
-            logger.info("模型加载成功并预热完成")
+            if cfg.capture_ai_debug:
+                logger.info("模型加载成功并预热完成")
 
-            # 创建线程池
-            cpu_count = os.cpu_count()
-            max_workers = min(cpu_count, 4)
-            self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+            # 动态创建线程池，根据系统资源调整
+            cpu_count = os.cpu_count() or 4
+            # 优化线程池配置，根据任务类型调整
+            # 检测和追踪任务是CPU密集型，使用接近CPU核心数的线程数
+            max_workers = min(cpu_count, 8)
+            self.executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="AimbotWorker"
+            )
 
             self.running = True
             self.last_config = self._get_current_config()
+            self.last_config_check_time = time.time()
+            self.last_fps_update_time = time.time()
             return True
         except Exception as e:
             logger.error("初始化失败:\n", exc_info=e)
@@ -169,28 +208,28 @@ class Aimbot:
         frame_count = 0
         prediction_count = 0
         start_time = time.time()
-        last_print_time = time.time()
-        last_config_check_time = time.time()
+        last_sleep_time = time.time()
 
         while self.running and not stop_event.is_set():
             try:
-                # 检查配置是否变更
                 current_time = time.time()
-                if current_time - last_config_check_time >= 1.0:  # 每秒检查一次配置
-                    self._check_config_changes()
-                    last_config_check_time = current_time
 
-                # 获取图像并记录时间
-                current_capture_time = time.time()
+                # 检查配置是否变更
+                if current_time - self.last_config_check_time >= self.config_check_interval:
+                    self._check_config_changes()
+                    self.last_config_check_time = current_time
+
+                # 获取图像
                 image = capture.get_new_frame()
                 if image is None:
-                    await asyncio.sleep(0.0001)
+                    # 无图像时短暂休眠，避免CPU空转
+                    if current_time - last_sleep_time >= 0.001:
+                        await asyncio.sleep(0.0001)
+                        last_sleep_time = current_time
                     continue
 
                 # 记录采集时间
-                self.capture_times.append(current_capture_time)
-                if len(self.capture_times) > self.max_time_history:
-                    self.capture_times.pop(0)
+                self.capture_times.append(current_time)
 
                 # 性能统计
                 frame_count += 1
@@ -200,7 +239,7 @@ class Aimbot:
                     image_signal.image.emit(image)
 
                 # 定期计算并发送瞬时帧率
-                if current_time - last_print_time >= 0.1:
+                if current_time - self.last_fps_update_time >= self.fps_update_interval:
                     # 计算瞬时采集帧率
                     if len(self.capture_times) >= 2:
                         capture_time_diff = self.capture_times[-1] - self.capture_times[0]
@@ -218,45 +257,38 @@ class Aimbot:
                             image_signal.predict_fps.emit(instant_predict_fps)
                     else:
                         image_signal.predict_fps.emit(0.0)
-
-                # 清除性能统计，不再打印
-                if current_time - last_print_time >= 10:
-                    frame_count = 0
-                    prediction_count = 0
-                    start_time = current_time
-                    last_print_time = current_time
-
-                # 处理图像
-                if cfg.capture_circle:
-                    image = capture.convert_to_circle(image)
+                    
+                    self.last_fps_update_time = current_time
 
                 # 检查是否需要预测
                 need_prediction = self._check_need_prediction()
 
                 # 执行预测
                 if need_prediction:
-                    # 记录预测开始时间
-                    predict_start_time = time.time()
+                    # 执行预测
                     result = await asyncio.get_event_loop().run_in_executor(
                         self.executor, perform_detection, self.model, image, tracker
                     )
-                    predict_end_time = time.time()
                     prediction_count += 1
 
                     # 记录预测时间
-                    self.prediction_times.append(predict_end_time)
-                    if len(self.prediction_times) > self.max_time_history:
-                        self.prediction_times.pop(0)
+                    self.prediction_times.append(time.time())
 
                     # 解析结果
-                    await asyncio.get_event_loop().run_in_executor(
-                        self.executor, frameParser.parse, result
-                    )
+                    if result is not None:
+                        await asyncio.get_event_loop().run_in_executor(
+                            self.executor, frameParser.parse, result
+                        )
 
             except Exception as e:
-                logger.error("主循环错误:\n", exc_info=e)
+                # 减少日志开销
+                if cfg.capture_ai_debug:
+                    logger.error("主循环错误:\n", exc_info=e)
 
-            await asyncio.sleep(0.0001)
+            # 控制休眠频率，避免过多的上下文切换
+            if current_time - last_sleep_time >= 0.001:
+                await asyncio.sleep(0.00001)
+                last_sleep_time = current_time
 
         # 释放资源
         self.stop()
@@ -272,16 +304,22 @@ class Aimbot:
                 changes[key] = {'old': self.last_config.get(key), 'new': value}
 
         if changes:
-            logger.info(f"配置变更: {changes}")
+            if cfg.capture_ai_debug:
+                logger.info(f"配置变更: {changes}")
             # 检查是否需要重启服务
             if self._needs_restart(changes):
-                logger.info("配置变更需要重启服务")
+                if cfg.capture_ai_debug:
+                    logger.info("配置变更需要重启服务")
                 # 重启服务
                 self._restart_service()
             else:
-                logger.info("配置变更只需要刷新参数")
+                if cfg.capture_ai_debug:
+                    logger.info("配置变更只需要刷新参数")
                 # 只刷新参数
                 self.last_config = current_config
+                # 如果热键变更，重新缓存
+                if 'aim_hotkeys' in changes:
+                    self._cache_hotkey_codes()
 
     def _needs_restart(self, changes):
         """检查是否需要重启服务"""
@@ -301,51 +339,49 @@ class Aimbot:
 
     def _restart_service(self):
         """重启服务"""
-        logger.info("正在重启服务...")
+        if cfg.capture_ai_debug:
+            logger.info("正在重启服务...")
 
         # 停止当前服务
         self.stop()
 
         # 等待一段时间
-        time.sleep(1.0)
+        time.sleep(0.2)  # 进一步减少等待时间
 
         # 重新初始化
         self.initialize()
-        logger.info("服务重启完成")
+        if cfg.capture_ai_debug:
+            logger.info("服务重启完成")
 
     def stop(self):
         """停止自瞄系统并释放资源"""
         if not self.running:
             return
 
-        logger.info("正在停止自瞄系统...")
+        if cfg.capture_ai_debug:
+            logger.info("正在停止自瞄系统...")
         self.running = False
 
         # 关闭线程池
         if self.executor:
-            self.executor.shutdown(wait=True)
-            logger.info("线程池已关闭")
+            self.executor.shutdown(wait=False, cancel_futures=True)  # 非阻塞关闭
+            if cfg.capture_ai_debug:
+                logger.info("线程池已关闭")
 
         # 释放模型
         if self.model:
             del self.model
-            logger.info("模型已释放")
+            if cfg.capture_ai_debug:
+                logger.info("模型已释放")
 
         # 清理CUDA缓存
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            logger.info("CUDA缓存已清理")
+            if cfg.capture_ai_debug:
+                logger.info("CUDA缓存已清理")
 
-        logger.info("自瞄系统已停止")
-
-    def _print_performance(self, frame_count, prediction_count, start_time, current_time):
-        """打印性能统计"""
-        elapsed_time = current_time - start_time
-        fps = frame_count / elapsed_time
-        prediction_fps = prediction_count / elapsed_time
-        logger.info(
-            f"性能统计: 总帧率={fps:.2f}, 预测帧率={prediction_fps:.2f}, 预测次数={prediction_count}"
-        )
+        if cfg.capture_ai_debug:
+            logger.info("自瞄系统已停止")
 
     def _check_need_prediction(self):
         """检查是否需要预测"""
@@ -356,9 +392,8 @@ class Aimbot:
         # 检查自瞄模式
         if cfg.aim_mode == "toggle":
             # 切换模式：按一下开启，再按一下关闭
-            for key_name in cfg.aim_hotkeys:
-                key_code = Buttons.KEY_CODES.get(key_name.strip())
-                if key_code:
+            for key_code in self.cached_hotkey_codes:
+                try:
                     # 获取当前按键状态
                     current_state = win32api.GetKeyState(key_code) < 0
                     # 获取上次按键状态
@@ -368,24 +403,35 @@ class Aimbot:
                     if current_state and not last_state:
                         # 切换自瞄状态
                         self.toggle_aim_enabled = not self.toggle_aim_enabled
-                        logger.info(f"自瞄已{'开启' if self.toggle_aim_enabled else '关闭'} (切换模式)")
+                        if cfg.capture_ai_debug:
+                            logger.info(f"自瞄已{'开启' if self.toggle_aim_enabled else '关闭'} (切换模式)")
 
                     # 更新按键状态
                     self.key_states[key_code] = current_state
+                except Exception as e:
+                    if cfg.capture_ai_debug:
+                        logger.error(f"热键检查错误: {e}")
 
             # 返回切换模式的自瞄状态
             return self.toggle_aim_enabled
         else:
             # 按住模式：保持原有的逻辑
-            for key_name in cfg.aim_hotkeys:
-                key_code = Buttons.KEY_CODES.get(key_name.strip())
-                if key_code and win32api.GetKeyState(key_code) < 0:
-                    return True
+            for key_code in self.cached_hotkey_codes:
+                try:
+                    if win32api.GetKeyState(key_code) < 0:
+                        return True
+                except Exception as e:
+                    if cfg.capture_ai_debug:
+                        logger.error(f"热键检查错误: {e}")
 
         # 默认不预测
         # 当自瞄关闭时，发送信号清零预测帧率并清空预测时间记录
-        image_signal.clear_predict_fps.emit()
-        # 清空预测时间记录，这样下次开启自瞄时会立即计算帧率
+        try:
+            image_signal.clear_predict_fps.emit()
+        except Exception as e:
+            if cfg.capture_ai_debug:
+                logger.error(f"发送信号错误: {e}")
+        # 清空预测时间记录
         self.prediction_times.clear()
         return False
 
