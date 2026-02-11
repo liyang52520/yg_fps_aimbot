@@ -1,7 +1,8 @@
 import os
-from PyQt6.QtWidgets import QWidget
-from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
+
 from PyQt6.QtCore import Qt, pyqtSignal, QPointF
+from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
+from PyQt6.QtWidgets import QWidget
 
 
 class BodyOffsetVisualizer(QWidget):

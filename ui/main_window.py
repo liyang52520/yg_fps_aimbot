@@ -1,14 +1,13 @@
+from PyQt6.QtGui import QFont, QPalette, QColor
 from PyQt6.QtWidgets import (
     QMainWindow, QApplication, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QMessageBox
 )
-from PyQt6.QtGui import QFont, QPalette, QColor
-from PyQt6.QtCore import Qt
 
-from .styles import Styles
-from .widgets import LogCapture
-from .tabs import AIConfigTab, AimConfigTab
 from .config_manager import ConfigManager
+from .styles import Styles
+from .tabs import AIConfigTab, AimConfigTab
+from .widgets import LogCapture
 
 
 class MainWindow(QMainWindow):
@@ -41,7 +40,7 @@ class MainWindow(QMainWindow):
 
         # 连接图像信号
         try:
-            from core.signals import image_signal
+            from ui.signals import image_signal
             image_signal.capture_fps.connect(self.update_capture_fps)
             image_signal.predict_fps.connect(self.update_predict_fps)
             image_signal.clear_predict_fps.connect(self.clear_predict_fps)
@@ -140,9 +139,6 @@ class MainWindow(QMainWindow):
             'mouse_sensitivity': self.aim_config_tab.mouse_sensitivity,
             'mouse_fov_width': self.aim_config_tab.mouse_fov_width,
             'mouse_fov_height': self.aim_config_tab.mouse_fov_height,
-            # ViGEmBus配置
-            'move_scope': self.aim_config_tab.move_scope,
-            'move_sleep': self.aim_config_tab.move_sleep,
         }
 
     def _load_config(self):
@@ -175,14 +171,14 @@ class MainWindow(QMainWindow):
         self.ai_config_tab.ai_conf.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.ai_device.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.ai_tracker.stateChanged.connect(self.auto_apply_config)
-        
+
         # 捕获配置信号
         self.ai_config_tab.capture_window_width.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.capture_window_height.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.capture_fps.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.capture_circle.stateChanged.connect(self.auto_apply_config)
         self.ai_config_tab.capture_ai_debug.stateChanged.connect(self._on_video_debug_changed)
-        
+
         # 瞄准配置信号
         self.aim_config_tab.auto.stateChanged.connect(self.auto_apply_config)
         self.aim_config_tab.aim_mode.currentTextChanged.connect(self.auto_apply_config)
@@ -190,17 +186,13 @@ class MainWindow(QMainWindow):
         self.aim_config_tab.body_x_offset.valueChanged.connect(self.auto_apply_config)
         self.aim_config_tab.body_y_offset.valueChanged.connect(self.auto_apply_config)
         self.aim_config_tab.hotkeys.selectionChanged.connect(self.auto_apply_config)
-        
+
         # 鼠标配置信号
         self.aim_config_tab.mouse_move.currentTextChanged.connect(self.auto_apply_config)
         self.aim_config_tab.mouse_dpi.valueChanged.connect(self.auto_apply_config)
         self.aim_config_tab.mouse_sensitivity.valueChanged.connect(self.auto_apply_config)
         self.aim_config_tab.mouse_fov_width.valueChanged.connect(self.auto_apply_config)
         self.aim_config_tab.mouse_fov_height.valueChanged.connect(self.auto_apply_config)
-        
-        # ViGEmBus配置信号
-        self.aim_config_tab.move_scope.valueChanged.connect(self.auto_apply_config)
-        self.aim_config_tab.move_sleep.valueChanged.connect(self.auto_apply_config)
 
     def _save_config(self):
         """保存配置文件"""

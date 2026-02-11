@@ -53,11 +53,6 @@ class Config():
         self.mouse_fov_width = int(self.config_Mouse["mouse_fov_width"])
         self.mouse_fov_height = int(self.config_Mouse["mouse_fov_height"])
 
-        # ViGEmBus setting if mouse_move is vigembus
-        self.config_ViGEmBus = self.config["ViGEmBus"]
-        self.viGEmBus_move_scope = self.config_ViGEmBus.getfloat("move_scope")
-        self.viGEmBus_move_sleep = self.config_ViGEmBus.getfloat("move_sleep")
-
         if verbose:
             logger.info("[Config] Config reloaded")
 

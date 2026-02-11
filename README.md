@@ -1,17 +1,17 @@
 # YG Aimbot
 
-written by Kimi GLM, Seed GLM and YG people;
+Written by Kimi GLM, Seed GLM, DouBao Seed GLM, MiniMax GLM and YG people;
 
 ### capture
 
-only support mss capture;
+Only support mss capture;
 
 ### move
 
-support makcu and ViGEmBus;
+Only support makcu;
 
 ### env
-- python3.7+
+- python3.10+
 
 ### models
 

@@ -1,5 +1,5 @@
-import os
 import configparser
+import os
 
 
 class ConfigManager:
@@ -97,15 +97,6 @@ class ConfigManager:
                 int(self.config["Mouse"].get("mouse_fov_height", "40"))
             )
 
-        # 加载ViGEmBus配置
-        if "ViGEmBus" in self.config:
-            ui_components['move_scope'].setValue(
-                int(self.config["ViGEmBus"].get("move_scope", "50"))
-            )
-            ui_components['move_sleep'].setValue(
-                float(self.config["ViGEmBus"].get("move_sleep", "0.05"))
-            )
-
         return True
 
     def save_config(self, ui_components):
@@ -149,12 +140,6 @@ class ConfigManager:
             "mouse_sensitivity": str(ui_components['mouse_sensitivity'].value()),
             "mouse_fov_width": str(ui_components['mouse_fov_width'].value()),
             "mouse_fov_height": str(ui_components['mouse_fov_height'].value())
-        }
-
-        # 保存ViGEmBus配置
-        self.config["ViGEmBus"] = {
-            "move_scope": str(ui_components['move_scope'].value()),
-            "move_sleep": str(ui_components['move_sleep'].value())
         }
 
         # 确保config目录存在
@@ -201,10 +186,6 @@ class ConfigManager:
             cfg.mouse_sensitivity = ui_components['mouse_sensitivity'].value()
             cfg.mouse_fov_width = ui_components['mouse_fov_width'].value()
             cfg.mouse_fov_height = ui_components['mouse_fov_height'].value()
-
-            # 应用ViGEmBus配置
-            cfg.viGEmBus_move_scope = ui_components['move_scope'].value()
-            cfg.viGEmBus_move_sleep = ui_components['move_sleep'].value()
 
             return True
         except Exception as e:

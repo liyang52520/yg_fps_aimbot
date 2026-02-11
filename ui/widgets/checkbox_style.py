@@ -1,5 +1,5 @@
-from PyQt6.QtGui import QPainter, QPen, QColor
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPen, QColor
 from PyQt6.QtWidgets import QProxyStyle
 
 
@@ -30,7 +30,7 @@ class CheckBoxStyle(QProxyStyle):
 
             if option.state & self.StateFlag.State_On:
                 painter.setPen(QPen(QColor(255, 255, 255), 1.5, Qt.PenStyle.SolidLine,
-                                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                                    Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
 
                 tick_start_x = rect.left() + 4
                 tick_start_y = rect.top() + rect.height() // 2

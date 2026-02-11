@@ -5,7 +5,6 @@ from collections import deque
 
 from core.config import cfg
 from core.move.makcu import Makcu
-from core.move.viGEmBus import ViGEmBus
 
 logger = logging.getLogger(__name__)
 
@@ -172,10 +171,8 @@ class MouseController:
 
         if cfg.mouse_move == "makcu":
             Makcu.move(ix, iy)
-        elif cfg.mouse_move == "vigembus":
-            ViGEmBus.move(ix, iy, cfg.viGEmBus_move_scope, cfg.viGEmBus_move_sleep)
         else:
-            logger.warning("Only support Makcu move and ViGEmBus move!")
+            logger.warning("Only support Makcu move!")
 
 
 # 创建全局实例

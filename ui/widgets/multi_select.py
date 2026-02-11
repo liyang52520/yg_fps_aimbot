@@ -1,6 +1,6 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QMenu
+from PyQt6.QtCore import pyqtSignal, QEvent
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import pyqtSignal, Qt, QEvent
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QMenu
 
 
 class MultiSelectDropDown(QWidget):
@@ -234,7 +234,7 @@ class MultiSelectDropDown(QWidget):
                     global_pos = obj.mapToGlobal(event.pos())
 
                 if self.container.geometry().contains(self.container.mapFromGlobal(global_pos)) or \
-                   self.dropdown_button.geometry().contains(self.dropdown_button.mapFromGlobal(global_pos)):
+                        self.dropdown_button.geometry().contains(self.dropdown_button.mapFromGlobal(global_pos)):
                     if self.menu_is_open:
                         self.menu.close()
                         self.on_menu_hide()

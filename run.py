@@ -2,17 +2,16 @@ import asyncio
 import concurrent.futures
 import logging
 import os
-import time
 import sys
 import threading
+import time
 
 import supervision as sv
 import torch
 import win32api
-from ultralytics import YOLO
-from PyQt6.QtWidgets import QApplication, QMainWindow
-from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtWidgets import QApplication
+from ultralytics import YOLO
 
 from core.buttons import Buttons
 from core.capture import capture
@@ -21,15 +20,15 @@ from core.frame_parser import frameParser
 # 导入日志配置
 from core.logger import setup_logger
 from ui.main_window import MainWindow
-
 # 从signals.py导入信号实例
-from core.signals import log_signal, image_signal
+from ui.signals import log_signal, image_signal
 
 # 创建全局停止事件
 stop_event = threading.Event()
 
 # 创建全局配置刷新事件
 config_refresh_event = threading.Event()
+
 
 # 创建日志处理器类
 class GUILogHandler(logging.Handler):
@@ -39,6 +38,7 @@ class GUILogHandler(logging.Handler):
             log_signal.log.emit(msg + '\n')
         except Exception:
             pass
+
 
 setup_logger()
 logger = logging.getLogger(__name__)
@@ -196,11 +196,11 @@ class Aimbot:
 
                 # 性能统计
                 frame_count += 1
-                
+
                 # 发送图像到GUI（当capture_ai_debug开启时）
                 if cfg.capture_ai_debug:
                     image_signal.image.emit(image)
-                
+
                 # 定期计算并发送瞬时帧率
                 if current_time - last_print_time >= 0.1:
                     # 计算瞬时采集帧率
@@ -211,7 +211,7 @@ class Aimbot:
                             image_signal.capture_fps.emit(instant_capture_fps)
                     else:
                         image_signal.capture_fps.emit(0.0)
-                    
+
                     # 计算瞬时预测帧率
                     if len(self.prediction_times) >= 2:
                         predict_time_diff = self.prediction_times[-1] - self.prediction_times[0]
@@ -266,13 +266,13 @@ class Aimbot:
     def _check_config_changes(self):
         """检查配置是否变更"""
         current_config = self._get_current_config()
-        
+
         # 检查是否有配置变更
         changes = {}
         for key, value in current_config.items():
             if key not in self.last_config or self.last_config[key] != value:
                 changes[key] = {'old': self.last_config.get(key), 'new': value}
-        
+
         if changes:
             logger.info(f"配置变更: {changes}")
             # 检查是否需要重启服务
@@ -294,23 +294,23 @@ class Aimbot:
             'ai_device',
             'ai_tracker'
         ]
-        
+
         for key in changes:
             if key in restart_keys:
                 return True
-        
+
         return False
 
     def _restart_service(self):
         """重启服务"""
         logger.info("正在重启服务...")
-        
+
         # 停止当前服务
         self.stop()
-        
+
         # 等待一段时间
         time.sleep(1.0)
-        
+
         # 重新初始化
         self.initialize()
         logger.info("服务重启完成")
@@ -319,25 +319,25 @@ class Aimbot:
         """停止自瞄系统并释放资源"""
         if not self.running:
             return
-            
+
         logger.info("正在停止自瞄系统...")
         self.running = False
-        
+
         # 关闭线程池
         if self.executor:
             self.executor.shutdown(wait=True)
             logger.info("线程池已关闭")
-        
+
         # 释放模型
         if self.model:
             del self.model
             logger.info("模型已释放")
-        
+
         # 清理CUDA缓存
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             logger.info("CUDA缓存已清理")
-        
+
         logger.info("自瞄系统已停止")
 
     def _print_performance(self, frame_count, prediction_count, start_time, current_time):
@@ -365,16 +365,16 @@ class Aimbot:
                     current_state = win32api.GetKeyState(key_code) < 0
                     # 获取上次按键状态
                     last_state = self.key_states.get(key_code, False)
-                    
+
                     # 检测按键按下事件（从释放到按下）
                     if current_state and not last_state:
                         # 切换自瞄状态
                         self.toggle_aim_enabled = not self.toggle_aim_enabled
                         logger.info(f"自瞄已{'开启' if self.toggle_aim_enabled else '关闭'} (切换模式)")
-                    
+
                     # 更新按键状态
                     self.key_states[key_code] = current_state
-            
+
             # 返回切换模式的自瞄状态
             return self.toggle_aim_enabled
         else:
@@ -390,6 +390,7 @@ class Aimbot:
         # 清空预测时间记录，这样下次开启自瞄时会立即计算帧率
         self.prediction_times.clear()
         return False
+
 
 # 全局Aimbot实例
 aimbot_instance = None
@@ -416,44 +417,44 @@ def run_gui():
     """运行GUI页面"""
     print("YG Aimbot Configurator is started!")
     app = QApplication(sys.argv)
-    
+
     # 创建自定义MainWindow子类，重写closeEvent方法
     class CustomMainWindow(MainWindow):
         def closeEvent(self, event: QCloseEvent):
             """处理关闭事件"""
             logger.info("正在关闭系统...")
-            
+
             # 首先设置停止事件
             stop_event.set()
-            
+
             # 等待自瞄系统停止
             if aimbot_instance:
                 aimbot_instance.stop()
-            
+
             # 等待自瞄线程结束
             if aimbot_thread and aimbot_thread.is_alive():
                 logger.info("等待自瞄线程结束...")
                 aimbot_thread.join(timeout=5.0)  # 最多等待5秒
                 if aimbot_thread.is_alive():
                     logger.warning("自瞄线程未能在超时时间内结束")
-            
+
             logger.info("所有服务已停止，正在关闭GUI页面...")
             # 关闭应用
             event.accept()
-    
+
     window = CustomMainWindow()
-    
+
     # 连接日志信号到GUI的append_log方法
     log_signal.log.connect(window.append_log)
-    
+
     # 连接图像信号到GUI的update_video方法
     image_signal.image.connect(window.update_video)
-    
+
     window.show()
-    
+
     # GUI页面显示后启动自瞄服务
     start_aimbot_service()
-    
+
     sys.exit(app.exec())
 
 

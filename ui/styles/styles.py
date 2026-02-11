@@ -261,18 +261,6 @@ class Styles:
         """
 
     @staticmethod
-    def get_vigembus_group_style():
-        """获取ViGEmBus配置组样式"""
-        return """
-            QWidget#vigembus_group {
-                border: 1px solid #e0e0e0;
-                border-radius: 6px;
-                background-color: #f9f9f9;
-                margin-top: 8px;
-            }
-        """
-
-    @staticmethod
     def get_body_visualizer_style():
         """获取身体可视化组件样式"""
         return """

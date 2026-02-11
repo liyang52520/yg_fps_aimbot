@@ -1,8 +1,8 @@
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QSlider
 )
-from PyQt6.QtCore import Qt, pyqtSignal
 
 from ..styles import Styles
 from ..widgets import CheckBoxStyle, BodyOffsetVisualizer, MultiSelectDropDown
@@ -139,7 +139,8 @@ class AimConfigTab(QWidget):
         self.target_cls = QComboBox()
         self.target_cls.addItems(["0", "1", "2", "3", "4", "5"])
         self.target_cls.setStyleSheet(Styles.get_combobox_style())
-        config_layout.addWidget(self.target_cls, row, 1, 1, 1, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        config_layout.addWidget(self.target_cls, row, 1, 1, 1,
+                                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         row += 1
 
         # 热键
@@ -168,11 +169,6 @@ class AimConfigTab(QWidget):
         mouse_layout = self._create_mouse_config_layout()
         right_layout.addLayout(mouse_layout)
 
-        # ViGEmBus配置
-        self.vigembus_group = self._create_vigembus_group()
-        right_layout.addWidget(self.vigembus_group)
-        self.vigembus_group.hide()
-
         right_layout.addStretch()
 
         return right_widget
@@ -193,10 +189,10 @@ class AimConfigTab(QWidget):
         label.setStyleSheet("color: #666666;")
         mouse_layout.addWidget(label, row, 0, 1, 1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.mouse_move = QComboBox()
-        self.mouse_move.addItems(["makcu", "vigembus"])
+        self.mouse_move.addItems(["makcu"])
         self.mouse_move.setStyleSheet(Styles.get_combobox_style())
-        self.mouse_move.currentTextChanged.connect(self._update_vigembus_visibility)
-        mouse_layout.addWidget(self.mouse_move, row, 1, 1, 1, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        mouse_layout.addWidget(self.mouse_move, row, 1, 1, 1,
+                               Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         row += 1
 
         # Mouse DPI
@@ -243,7 +239,8 @@ class AimConfigTab(QWidget):
         self.mouse_sensitivity_slider.setMaximum(100)
         self.mouse_sensitivity_slider.setSingleStep(1)
         self.mouse_sensitivity_slider.valueChanged.connect(lambda value: self.mouse_sensitivity.setValue(value / 10))
-        self.mouse_sensitivity.valueChanged.connect(lambda value: self.mouse_sensitivity_slider.setValue(int(value * 10)))
+        self.mouse_sensitivity.valueChanged.connect(
+            lambda value: self.mouse_sensitivity_slider.setValue(int(value * 10)))
         self.mouse_sensitivity_slider.setStyleSheet(Styles.get_slider_style())
 
         sensitivity_layout.addWidget(self.mouse_sensitivity_slider)
@@ -301,83 +298,6 @@ class AimConfigTab(QWidget):
         mouse_layout.addLayout(fov_height_layout, row, 1, 1, 1)
 
         return mouse_layout
-
-    def _create_vigembus_group(self):
-        """创建ViGEmBus配置组"""
-        vigembus_group = QWidget()
-        vigembus_group.setStyleSheet(Styles.get_vigembus_group_style())
-        vigembus_group.setObjectName("vigembus_group")
-        vigembus_layout = QGridLayout(vigembus_group)
-        vigembus_layout.setContentsMargins(16, 16, 16, 16)
-        vigembus_layout.setSpacing(10)
-        vigembus_layout.setColumnStretch(0, 0)
-        vigembus_layout.setColumnStretch(1, 1)
-        vigembus_layout.setColumnStretch(2, 0)
-
-        vigembus_title = QLabel("ViGEmBus配置")
-        vigembus_title.setStyleSheet(Styles.get_title_label_style())
-        vigembus_layout.addWidget(vigembus_title, 0, 0, 1, 3, Qt.AlignmentFlag.AlignLeft)
-
-        row = 1
-
-        # Move Scope
-        label = QLabel("移动范围:")
-        label.setStyleSheet("color: #666666;")
-        vigembus_layout.addWidget(label, row, 0, 1, 1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        scope_layout = QHBoxLayout()
-        self.move_scope = QSpinBox()
-        self.move_scope.setMinimum(10)
-        self.move_scope.setMaximum(200)
-        self.move_scope.setFixedWidth(80)
-        self.move_scope.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.move_scope.setStyleSheet(Styles.get_spinbox_style())
-
-        self.move_scope_slider = QSlider(Qt.Orientation.Horizontal)
-        self.move_scope_slider.setMinimum(10)
-        self.move_scope_slider.setMaximum(200)
-        self.move_scope_slider.setSingleStep(5)
-        self.move_scope_slider.valueChanged.connect(lambda value: self.move_scope.setValue(value))
-        self.move_scope.valueChanged.connect(lambda value: self.move_scope_slider.setValue(value))
-        self.move_scope_slider.setStyleSheet(Styles.get_slider_style())
-
-        scope_layout.addWidget(self.move_scope_slider)
-        scope_layout.addWidget(self.move_scope)
-        vigembus_layout.addLayout(scope_layout, row, 1, 1, 2)
-        row += 1
-
-        # Move Sleep
-        label = QLabel("移动延迟:")
-        label.setStyleSheet("color: #666666;")
-        vigembus_layout.addWidget(label, row, 0, 1, 1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        sleep_layout = QHBoxLayout()
-        self.move_sleep = QDoubleSpinBox()
-        self.move_sleep.setMinimum(0.01)
-        self.move_sleep.setMaximum(1.0)
-        self.move_sleep.setSingleStep(0.01)
-        self.move_sleep.setFixedWidth(80)
-        self.move_sleep.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
-        self.move_sleep.setStyleSheet(Styles.get_spinbox_style())
-
-        self.move_sleep_slider = QSlider(Qt.Orientation.Horizontal)
-        self.move_sleep_slider.setMinimum(1)
-        self.move_sleep_slider.setMaximum(100)
-        self.move_sleep_slider.setSingleStep(1)
-        self.move_sleep_slider.valueChanged.connect(lambda value: self.move_sleep.setValue(value / 100))
-        self.move_sleep.valueChanged.connect(lambda value: self.move_sleep_slider.setValue(int(value * 100)))
-        self.move_sleep_slider.setStyleSheet(Styles.get_slider_style())
-
-        sleep_layout.addWidget(self.move_sleep_slider)
-        sleep_layout.addWidget(self.move_sleep)
-        vigembus_layout.addLayout(sleep_layout, row, 1, 1, 2)
-
-        return vigembus_group
-
-    def _update_vigembus_visibility(self, text):
-        """根据鼠标移动方式更新ViGEmBus配置的可见性"""
-        if text == "vigembus":
-            self.vigembus_group.show()
-        else:
-            self.vigembus_group.hide()
 
     def _on_offset_changed(self):
         """当偏移输入框值变化时，更新可视化组件"""

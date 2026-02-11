@@ -1,10 +1,11 @@
 import os
+
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
     QPushButton, QSlider, QTextEdit
 )
-from PyQt6.QtCore import Qt
 
 from ..styles import Styles
 from ..widgets import CheckBoxStyle
@@ -327,7 +328,8 @@ class AIConfigTab(QWidget):
         # 圆形捕获和视频监控
         circle_label = QLabel("圆形捕获:")
         circle_label.setStyleSheet("color: #666666;")
-        capture_layout.addWidget(circle_label, row, 0, 1, 1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        capture_layout.addWidget(circle_label, row, 0, 1, 1,
+                                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         circle_layout = QHBoxLayout()
         circle_layout.setSpacing(40)
@@ -380,7 +382,6 @@ class AIConfigTab(QWidget):
         """更新视频监控区域"""
         from PyQt6.QtGui import QPixmap, QImage
         import cv2
-        import time
 
         if image is None or self.video_label is None:
             return
@@ -395,7 +396,8 @@ class AIConfigTab(QWidget):
                 q_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
 
                 pixmap = QPixmap.fromImage(q_image)
-                scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation)
 
                 self.video_label.setPixmap(scaled_pixmap)
                 self.video_label.setScaledContents(False)
