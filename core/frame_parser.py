@@ -89,12 +89,29 @@ class FrameParser:
             self._reset_tracking()
             return
 
-        # 传递给鼠标控制
-        mouse.process_data((target.x, target.y, target.w, target.h, target.cls))
+        # 计算目标与屏幕中心的距离
+        import math
+        center_x = capture.screen_x_center
+        center_y = capture.screen_y_center
+        distance = math.sqrt((target.x - center_x) ** 2 + (target.y - center_y) ** 2)
 
-        # 更新跟踪状态
-        self.tracked_target = target
-        self.tracking_confidence = min(1.0, self.tracking_confidence + 0.2)
+        # 检查目标是否在配置的最大距离范围内
+        if hasattr(cfg, 'aim_max_target_distance'):
+            max_distance = cfg.aim_max_target_distance
+        else:
+            max_distance = 150  # 默认值
+
+        # 只有在范围内才进行瞄准
+        if distance <= max_distance:
+            # 传递给鼠标控制
+            mouse.process_data((target.x, target.y, target.w, target.h, target.cls))
+
+            # 更新跟踪状态
+            self.tracked_target = target
+            self.tracking_confidence = min(1.0, self.tracking_confidence + 0.2)
+        else:
+            # 目标太远，重置跟踪
+            self._reset_tracking()
 
     def _reset_tracking(self):
         """重置跟踪状态"""
@@ -108,6 +125,7 @@ class FrameParser:
             if isinstance(frame, sv.Detections):
                 boxes_array, classes_tensor = self._convert_sv_to_tensor(frame)
             else:
+                # 旧的YOLO格式支持
                 boxes_array = frame.boxes.xywh.to(self.arch)
                 classes_tensor = frame.boxes.cls.to(self.arch)
 

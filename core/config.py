@@ -44,6 +44,7 @@ class Config():
         self.aim_body_x_offset = float(self.config_Aim["body_x_offset"])
         self.aim_body_y_offset = float(self.config_Aim["body_y_offset"])
         self.aim_mode = self.config_Aim.get("mode", "hold")
+        self.aim_max_target_distance = int(self.config_Aim.get("max_target_distance", 150))
 
         # Mouse
         self.config_Mouse = self.config["Mouse"]

@@ -7,12 +7,14 @@ import threading
 import time
 from collections import deque
 
+import cv2
+import numpy as np
+import onnxruntime as ort
 import supervision as sv
 import torch
 import win32api
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QApplication
-from ultralytics import YOLO
 
 from core.buttons import Buttons
 from core.capture import capture
@@ -75,36 +77,157 @@ detection_kwargs = {
 }
 
 
-def perform_detection(model, image, tracker=None):
+def perform_detection(session, image, tracker=None):
     """执行目标检测"""
     try:
-        # 动态更新必要的参数
-        kwargs = detection_kwargs.copy()
-        kwargs.update({
-            'source': image,
-            'imgsz': cfg.ai_model_image_size,
-            'conf': cfg.ai_conf,
-            'device': cfg.ai_device,
-            'half': cfg.ai_device != "cpu",
-            'max_det': 8,
-            'stream': bool(tracker)
-        })
-
-        results = model.predict(**kwargs)
-
+        # 图像预处理
+        input_shape = session.get_inputs()[0].shape
+        input_size = (input_shape[3], input_shape[2])  # (width, height)
+        
+        # 调整图像大小
+        resized = cv2.resize(image, input_size)
+        
+        # 转换为NCHW格式
+        input_tensor = resized.transpose(2, 0, 1).astype(np.float32)
+        input_tensor = np.expand_dims(input_tensor, axis=0)
+        
+        # 归一化
+        input_tensor /= 255.0
+        
+        # 执行推理
+        outputs = session.run(None, {session.get_inputs()[0].name: input_tensor})
+        
+        # 解析输出
+        detections = parse_onnx_output(outputs, image.shape, input_size, cfg.ai_conf)
+        
         if tracker:
-            for res in results:
-                det = sv.Detections.from_ultralytics(res)
-                return tracker.update_with_detections(det)
-            return None
+            return tracker.update_with_detections(detections)
         else:
-            # 非stream模式直接返回结果
-            return results[0]
+            return detections
     except Exception as e:
         # 减少日志开销
         if cfg.capture_ai_debug:
             logger.error(f"检测错误: {e}")
         return None
+
+
+def parse_onnx_output(outputs, image_shape, input_size, conf_threshold):
+    """解析ONNX模型输出"""
+    # 假设输出是[batch, num_detections, 7]，其中7是[cx, cy, w, h, conf, class_id, ...]
+    if len(outputs) == 1:
+        output = outputs[0]
+    else:
+        # 对于YOLOv5 ONNX输出，通常是三个输出张量，需要合并处理
+        output = outputs[0]
+    
+    # 过滤低置信度检测
+    mask = output[0, :, 4] > conf_threshold
+    filtered = output[0, mask]
+    
+    if len(filtered) == 0:
+        # 返回空检测结果
+        return sv.Detections(
+            xyxy=np.empty((0, 4)),
+            confidence=np.empty(0),
+            class_id=np.empty(0, dtype=int)
+        )
+    
+    # 转换为xyxy格式
+    cx, cy, w, h, conf, class_id = filtered.T[:6]
+    x1 = cx - w / 2
+    y1 = cy - h / 2
+    x2 = cx + w / 2
+    y2 = cy + h / 2
+    
+    # 调整坐标到原始图像大小
+    orig_h, orig_w = image_shape[:2]
+    input_w, input_h = input_size  # (width, height)
+    
+    x1 = (x1 / input_w) * orig_w
+    y1 = (y1 / input_h) * orig_h
+    x2 = (x2 / input_w) * orig_w
+    y2 = (y2 / input_h) * orig_h
+    
+    # 应用非极大值抑制
+    xyxy = np.column_stack((x1, y1, x2, y2))
+    indices = nms(xyxy, conf, class_id, iou_threshold=0.45)
+    
+    if len(indices) == 0:
+        return sv.Detections(
+            xyxy=np.empty((0, 4)),
+            confidence=np.empty(0),
+            class_id=np.empty(0, dtype=int)
+        )
+    
+    # 构建最终检测结果
+    final_xyxy = xyxy[indices]
+    final_conf = conf[indices]
+    final_class_id = class_id[indices].astype(int)
+    
+    return sv.Detections(
+        xyxy=final_xyxy,
+        confidence=final_conf,
+        class_id=final_class_id
+    )
+
+
+def nms(boxes, scores, class_ids, iou_threshold):
+    """非极大值抑制"""
+    if len(boxes) == 0:
+        return []
+    
+    # 按类别分组
+    unique_classes = np.unique(class_ids)
+    keep_indices = []
+    
+    for cls in unique_classes:
+        # 获取当前类别的边界框和分数
+        cls_mask = class_ids == cls
+        cls_boxes = boxes[cls_mask]
+        cls_scores = scores[cls_mask]
+        cls_indices = np.where(cls_mask)[0]
+        
+        # 按分数排序
+        sorted_indices = np.argsort(cls_scores)[::-1]
+        cls_boxes = cls_boxes[sorted_indices]
+        cls_indices = cls_indices[sorted_indices]
+        
+        # 应用NMS
+        while len(cls_boxes) > 0:
+            # 保留分数最高的边界框
+            keep_indices.append(cls_indices[0])
+            
+            # 计算与其他边界框的IoU
+            ious = calculate_iou(cls_boxes[0], cls_boxes[1:])
+            
+            # 过滤掉IoU大于阈值的边界框
+            mask = ious <= iou_threshold
+            cls_boxes = cls_boxes[1:][mask]
+            cls_indices = cls_indices[1:][mask]
+    
+    return keep_indices
+
+
+def calculate_iou(box, boxes):
+    """计算IoU"""
+    # 计算交集
+    x1 = np.maximum(box[0], boxes[:, 0])
+    y1 = np.maximum(box[1], boxes[:, 1])
+    x2 = np.minimum(box[2], boxes[:, 2])
+    y2 = np.minimum(box[3], boxes[:, 3])
+    
+    # 计算交集面积
+    intersection = np.maximum(0, x2 - x1) * np.maximum(0, y2 - y1)
+    
+    # 计算并集面积
+    box_area = (box[2] - box[0]) * (box[3] - box[1])
+    boxes_area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    union = box_area + boxes_area - intersection
+    
+    # 计算IoU
+    iou = intersection / union
+    
+    return iou
 
 
 class Aimbot:
@@ -170,15 +293,23 @@ class Aimbot:
     def initialize(self):
         """初始化"""
         try:
-            # 加载模型
-            self.model = YOLO(f"models/{cfg.ai_model_name}", task="detect")
+            # 加载ONNX模型
+            model_path = f"models/{cfg.ai_model_name}"
+            providers = ['CPUExecutionProvider']
+            if cfg.ai_device != "cpu":
+                providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+            self.session = ort.InferenceSession(model_path, providers=providers)
+            
+            # 获取输入信息
+            self.input_name = self.session.get_inputs()[0].name
+            self.input_shape = self.session.get_inputs()[0].shape
+            self.output_names = [output.name for output in self.session.get_outputs()]
 
             # 预热模型
-            import numpy as np
-            dummy_image = np.zeros((cfg.ai_model_image_size, cfg.ai_model_image_size, 3), dtype=np.uint8)
-            perform_detection(self.model, dummy_image, tracker)
+            dummy_image = np.zeros((self.input_shape[2], self.input_shape[3], 3), dtype=np.uint8)
+            perform_detection(self.session, dummy_image, tracker)
             if cfg.capture_ai_debug:
-                logger.info("模型加载成功并预热完成")
+                logger.info("ONNX模型加载成功并预热完成")
 
             # 动态创建线程池，根据系统资源调整
             cpu_count = os.cpu_count() or 4
@@ -267,7 +398,7 @@ class Aimbot:
                 if need_prediction:
                     # 执行预测
                     result = await asyncio.get_event_loop().run_in_executor(
-                        self.executor, perform_detection, self.model, image, tracker
+                        self.executor, perform_detection, self.session, image, tracker
                     )
                     prediction_count += 1
 
@@ -368,11 +499,11 @@ class Aimbot:
             if cfg.capture_ai_debug:
                 logger.info("线程池已关闭")
 
-        # 释放模型
-        if self.model:
-            del self.model
+        # 释放ONNX会话
+        if hasattr(self, 'session') and self.session:
+            del self.session
             if cfg.capture_ai_debug:
-                logger.info("模型已释放")
+                logger.info("ONNX会话已释放")
 
         # 清理CUDA缓存
         if torch.cuda.is_available():
