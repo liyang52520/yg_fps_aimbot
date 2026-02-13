@@ -31,8 +31,8 @@ class Config():
         # AI
         self.config_AI = self.config["AI"]
         self.ai_model_name = str(self.config_AI["ai_model_name"])
-        self.ai_model_image_size = int(self.config_AI["ai_model_image_size"])
-        self.ai_model_type = self.config_AI["ai_model_type"]
+        # 不区分大小写地检查模型名称是否以'yolov5'开头
+        self.ai_model_type = "yolov5" if  self.ai_model_name.lower().startswith("yolov5") else "ultralytics"
         self.ai_conf = float(self.config_AI["ai_conf"])
         self.ai_device = str(self.config_AI["ai_device"])
         self.ai_tracker = self.config_AI.getboolean("ai_tracker")

@@ -45,6 +45,18 @@ class MouseController:
         # 限制参数
         self.max_move = 40
         self.min_move = 0.8
+        
+        # 模型输入大小（默认640，会在模型加载后更新）
+        self.model_input_size = 640
+    
+    def set_model_input_size(self, input_size):
+        """设置模型输入大小
+        
+        Args:
+            input_size: 模型输入大小（正方形）
+        """
+        self.model_input_size = input_size
+        logger.info(f"鼠标控制器模型输入大小已更新: {self.model_input_size}x{self.model_input_size}")
 
     def process_data(self, data):
         """处理目标数据"""
@@ -92,11 +104,11 @@ class MouseController:
 
         # 考虑捕获窗口大小和模型输入大小之间的比例关系
         # 当捕获窗口大小与模型输入大小不同时，需要调整目标坐标
-        capture_to_model_ratio = cfg.ai_model_image_size / max(cfg.capture_window_width, cfg.capture_window_height)
+        capture_to_model_ratio = self.model_input_size / max(cfg.capture_window_width, cfg.capture_window_height)
 
         # 使用模型输入大小的中心，这样无论捕获窗口大小如何变化，计算出的鼠标移动都是准确的
-        center_x = cfg.ai_model_image_size / 2
-        center_y = cfg.ai_model_image_size / 2
+        center_x = self.model_input_size / 2
+        center_y = self.model_input_size / 2
 
         # 调整目标坐标，考虑捕获窗口大小和模型输入大小之间的比例关系
         adjusted_target_x = target_x * capture_to_model_ratio
@@ -127,8 +139,8 @@ class MouseController:
                 1 - self.smooth_factor) * self.current_offset_y
 
         # 计算角度，使用模型输入大小，这样无论捕获窗口大小如何变化，计算出的鼠标移动都是准确的
-        degrees_per_pixel_x = cfg.mouse_fov_width / cfg.ai_model_image_size
-        degrees_per_pixel_y = cfg.mouse_fov_height / cfg.ai_model_image_size
+        degrees_per_pixel_x = cfg.mouse_fov_width / self.model_input_size
+        degrees_per_pixel_y = cfg.mouse_fov_height / self.model_input_size
 
         angle_x = self.current_offset_x * degrees_per_pixel_x
         angle_y = self.current_offset_y * degrees_per_pixel_y

@@ -28,6 +28,18 @@ class AIConfigTab(QWidget):
         self.predict_fps_history = []
         self.max_history = 10  # 保存10个最近的帧率值
         self._setup_ui()
+    
+    def update_capture_window_limits(self, max_size):
+        """更新捕获窗口大小的限制
+        
+        Args:
+            max_size: 最大捕获窗口大小
+        """
+        if hasattr(self, 'capture_window_width'):
+            self.capture_window_width.setMaximum(max_size)
+        if hasattr(self, 'capture_window_height'):
+            self.capture_window_height.setMaximum(max_size)
+        logger.info(f"捕获窗口大小限制已更新为: {max_size}x{max_size}")
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -183,19 +195,6 @@ class AIConfigTab(QWidget):
         model_layout.addWidget(self.ai_model_name)
         model_layout.addWidget(refresh_button)
         ai_layout.addLayout(model_layout, row, 1, 1, 2)
-        row += 1
-
-        # AI Model Image Size
-        label = QLabel("模型图像尺寸:")
-        label.setStyleSheet("color: #666666;")
-        ai_layout.addWidget(label, row, 0, 1, 1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.ai_model_image_size = QSpinBox()
-        self.ai_model_image_size.setMinimum(128)
-        self.ai_model_image_size.setMaximum(1024)
-        self.ai_model_image_size.setSingleStep(32)
-        self.ai_model_image_size.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.ai_model_image_size.setStyleSheet(Styles.get_spinbox_style())
-        ai_layout.addWidget(self.ai_model_image_size, row, 1, 1, 2)
         row += 1
 
         # AI Conf

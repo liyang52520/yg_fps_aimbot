@@ -35,46 +35,12 @@ class YOLOv5Model(YOLOModel):
             # 选择设备
             device = select_device(self.device)
             
-            # 尝试不同的输入尺寸，直到找到适合模型的尺寸
-            possible_sizes = [(320, 320), (416, 416), (640, 640), (800, 800), (1024, 1024)]
-            success = False
-            
-            for size in possible_sizes:
-                try:
-                    # 使用DetectMultiBackend加载模型
-                    self.model = DetectMultiBackend(
-                        weights=self.model_path,
-                        device=device,
-                        dnn=False,
-                        data=None,
-                        fp16=False
-                    )
-                    
-                    # 获取模型属性
-                    self.stride = self.model.stride
-                    self.names = self.model.names
-                    self.pt = self.model.pt
-                    
-                    # 使用当前尺寸
-                    self.imgsz = size
-                    
-                    # 检查图像尺寸
-                    from utils.general import check_img_size
-                    self.imgsz = check_img_size(self.imgsz, s=self.stride)
-                    
-                    # 预热模型
-                    self._warmup()
-                    
-                    logger.info(f"YOLOv5模型加载成功: {self.model_path}, 输入尺寸: {self.imgsz}")
-                    success = True
-                    break
-                except Exception as e:
-                    logger.debug(f"尝试尺寸 {size} 失败: {e}")
-                    continue
-            
-            if not success:
-                # 如果所有尺寸都失败，尝试使用默认尺寸
-                logger.error("所有尝试的输入尺寸都失败，使用默认尺寸重试")
+            # 对于TensorRT引擎模型，使用固定的640x640尺寸
+            if self.model_path.endswith('.engine'):
+                logger.info(f"检测到TensorRT引擎模型: {self.model_path}，使用固定输入尺寸640x640")
+                self.imgsz = (640, 640)
+                
+                # 加载模型
                 self.model = DetectMultiBackend(
                     weights=self.model_path,
                     device=device,
@@ -96,8 +62,71 @@ class YOLOv5Model(YOLOModel):
                 self._warmup()
                 
                 logger.info(f"YOLOv5模型加载成功: {self.model_path}, 输入尺寸: {self.imgsz}")
-            
-            return True
+                return True
+            else:
+                # 尝试不同的输入尺寸，直到找到适合模型的尺寸
+                possible_sizes = [(320, 320), (416, 416), (640, 640), (800, 800), (1024, 1024)]
+                success = False
+                
+                for size in possible_sizes:
+                    try:
+                        # 使用DetectMultiBackend加载模型
+                        self.model = DetectMultiBackend(
+                            weights=self.model_path,
+                            device=device,
+                            dnn=False,
+                            data=None,
+                            fp16=False
+                        )
+                        
+                        # 获取模型属性
+                        self.stride = self.model.stride
+                        self.names = self.model.names
+                        self.pt = self.model.pt
+                        
+                        # 使用当前尺寸
+                        self.imgsz = size
+                        
+                        # 检查图像尺寸
+                        from utils.general import check_img_size
+                        self.imgsz = check_img_size(self.imgsz, s=self.stride)
+                        
+                        # 预热模型
+                        self._warmup()
+                        
+                        logger.info(f"YOLOv5模型加载成功: {self.model_path}, 输入尺寸: {self.imgsz}")
+                        success = True
+                        break
+                    except Exception as e:
+                        logger.debug(f"尝试尺寸 {size} 失败: {e}")
+                        continue
+                
+                if not success:
+                    # 如果所有尺寸都失败，尝试使用默认尺寸
+                    logger.error("所有尝试的输入尺寸都失败，使用默认尺寸重试")
+                    self.model = DetectMultiBackend(
+                        weights=self.model_path,
+                        device=device,
+                        dnn=False,
+                        data=None,
+                        fp16=False
+                    )
+                    
+                    # 获取模型属性
+                    self.stride = self.model.stride
+                    self.names = self.model.names
+                    self.pt = self.model.pt
+                    
+                    # 检查图像尺寸
+                    from utils.general import check_img_size
+                    self.imgsz = check_img_size(self.imgsz, s=self.stride)
+                    
+                    # 预热模型
+                    self._warmup()
+                    
+                    logger.info(f"YOLOv5模型加载成功: {self.model_path}, 输入尺寸: {self.imgsz}")
+                
+                return True
         except Exception as e:
             logger.error(f"YOLOv5模型加载失败: {e}")
             return False
@@ -120,6 +149,18 @@ class YOLOv5Model(YOLOModel):
             except Exception as e:
                 logger.debug(f"模型预热失败: {e}")
                 # 预热失败不影响模型加载，继续执行
+    
+    def get_input_size(self):
+        """
+        获取模型输入大小
+        
+        Returns:
+            int: 模型输入大小（正方形）
+        """
+        if isinstance(self.imgsz, (tuple, list)):
+            return self.imgsz[0]
+        else:
+            return int(self.imgsz)
     
     def predict(self, image: np.ndarray) -> sv.Detections:
         """

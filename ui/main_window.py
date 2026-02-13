@@ -116,7 +116,6 @@ class MainWindow(QMainWindow):
         return {
             # AI配置
             'ai_model_name': self.ai_config_tab.ai_model_name,
-            'ai_model_image_size': self.ai_config_tab.ai_model_image_size,
             'ai_conf': self.ai_config_tab.ai_conf,
             'ai_device': self.ai_config_tab.ai_device,
             'ai_tracker': self.ai_config_tab.ai_tracker,
@@ -167,7 +166,6 @@ class MainWindow(QMainWindow):
         """连接所有配置组件的信号到自动应用配置"""
         # AI配置信号
         self.ai_config_tab.ai_model_name.currentTextChanged.connect(self.auto_apply_config)
-        self.ai_config_tab.ai_model_image_size.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.ai_conf.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.ai_device.valueChanged.connect(self.auto_apply_config)
         self.ai_config_tab.ai_tracker.stateChanged.connect(self.auto_apply_config)
@@ -231,3 +229,11 @@ class MainWindow(QMainWindow):
     def clear_predict_fps(self):
         """清零预测帧率"""
         self.ai_config_tab.clear_predict_fps()
+    
+    def update_capture_window_limits(self, max_size):
+        """更新捕获窗口大小的限制
+        
+        Args:
+            max_size: 最大捕获窗口大小
+        """
+        self.ai_config_tab.update_capture_window_limits(max_size)

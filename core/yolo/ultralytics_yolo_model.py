@@ -33,15 +33,50 @@ class UltralyticsYOLOModel(YOLOModel):
             # 使用ultralytics库加载模型（支持pt、onnx、engine、Openvino等格式）
             self.model = YOLO(self.model_path)
             
+            # 获取模型输入大小
+            self.input_size = self._get_model_input_size()
+            
             # 预热模型
-            dummy_image = np.zeros((640, 640, 3), dtype=np.uint8)
+            dummy_image = np.zeros((self.input_size, self.input_size, 3), dtype=np.uint8)
             self.predict(dummy_image)
             
             logger.info(f"Ultralytics YOLO模型加载成功: {self.model_path}")
+            logger.info(f"模型输入大小: {self.input_size}x{self.input_size}")
             return True
         except Exception as e:
             logger.error(f"Ultralytics YOLO模型加载失败: {e}")
             return False
+    
+    def _get_model_input_size(self):
+        """
+        获取模型输入大小
+        
+        Returns:
+            int: 模型输入大小（正方形）
+        """
+        try:
+            # 对于Ultralytics YOLO模型，我们可以通过模型的配置获取输入大小
+            if hasattr(self.model.model, 'yaml') and 'height' in self.model.model.yaml:
+                return int(self.model.model.yaml['height'])
+            elif hasattr(self.model, 'model') and hasattr(self.model.model, 'stride'):
+                # 对于某些模型，我们可以通过stride推断输入大小
+                # 默认使用640作为 fallback
+                return 640
+            else:
+                # 默认为640
+                return 640
+        except Exception as e:
+            logger.warning(f"获取模型输入大小失败，使用默认值640: {e}")
+            return 640
+    
+    def get_input_size(self):
+        """
+        获取模型输入大小
+        
+        Returns:
+            int: 模型输入大小（正方形）
+        """
+        return getattr(self, 'input_size', 640)
     
     def predict(self, image: np.ndarray) -> sv.Detections:
         """

@@ -22,11 +22,15 @@ def create_yolo_model(model_path: str, device: str, conf: float, model_type: str
     Returns:
         Optional[YOLOModel]: YOLO模型实例
     """
+    logger.info(f"接收到的模型类型: {model_type}")
+    logger.info(f"模型路径: {model_path}")
     # 对于PT格式的模型，使用Ultralytics YOLO类加载
     if model_type == "ultralytics":
+        logger.info("使用UltralyticsYOLOModel加载模型")
         model = UltralyticsYOLOModel(model_path, device, conf)
     # 对于YOLOv5非PT格式的模型，使用YOLOv5Model类加载
     elif model_type == "yolov5":
+        logger.info("使用YOLOv5Model加载模型")
         model = YOLOv5Model(model_path, device, conf)
     else:
         raise ValueError("Invalid model type")

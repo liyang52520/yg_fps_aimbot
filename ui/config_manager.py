@@ -26,9 +26,6 @@ class ConfigManager:
             ui_components['ai_model_name'].setCurrentText(
                 self.config["AI"].get("ai_model_name", "YOLOv8s_apex_teammate_enemy.engine")
             )
-            ui_components['ai_model_image_size'].setValue(
-                int(self.config["AI"].get("ai_model_image_size", "640"))
-            )
             ui_components['ai_conf'].setValue(
                 float(self.config["AI"].get("ai_conf", "0.2"))
             )
@@ -108,7 +105,6 @@ class ConfigManager:
         # 保存AI配置
         self.config["AI"] = {
             "ai_model_name": ui_components['ai_model_name'].currentText(),
-            "ai_model_image_size": str(ui_components['ai_model_image_size'].value()),
             "ai_conf": str(ui_components['ai_conf'].value()),
             "ai_device": str(ui_components['ai_device'].value()),
             "ai_tracker": str(ui_components['ai_tracker'].isChecked())
@@ -160,7 +156,8 @@ class ConfigManager:
 
             # 应用AI配置
             cfg.ai_model_name = ui_components['ai_model_name'].currentText()
-            cfg.ai_model_image_size = ui_components['ai_model_image_size'].value()
+            # 重新计算模型类型
+            cfg.ai_model_type = "yolov5" if  cfg.ai_model_name.lower().startswith("yolov5") else "ultralytics"
             cfg.ai_conf = ui_components['ai_conf'].value()
             cfg.ai_device = str(ui_components['ai_device'].value())
             cfg.ai_tracker = ui_components['ai_tracker'].isChecked()

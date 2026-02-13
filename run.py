@@ -248,7 +248,6 @@ class Aimbot:
         """获取当前配置快照"""
         return {
             'ai_model_name': cfg.ai_model_name,
-            'ai_model_image_size': cfg.ai_model_image_size,
             'ai_conf': cfg.ai_conf,
             'ai_device': cfg.ai_device,
             'ai_tracker': cfg.ai_tracker,
@@ -280,6 +279,23 @@ class Aimbot:
             if not self.model:
                 logger.error("模型加载失败")
                 return False
+            
+            # 获取模型输入大小并更新鼠标控制器
+            from core.mouse import mouse
+            model_input_size = self.model.get_input_size()
+            mouse.set_model_input_size(model_input_size)
+            logger.info(f"模型输入大小已设置为: {model_input_size}x{model_input_size}")
+            
+            # 更新GUI中的捕获窗口大小限制
+            try:
+                from ui.main_window import MainWindow
+                # 查找所有打开的MainWindow实例
+                for widget in QApplication.topLevelWidgets():
+                    if isinstance(widget, MainWindow):
+                        widget.update_capture_window_limits(model_input_size)
+                        break
+            except Exception as e:
+                logger.debug(f"更新捕获窗口大小限制失败: {e}")
 
             # 动态创建线程池，根据系统资源调整
             cpu_count = os.cpu_count() or 4
@@ -417,6 +433,8 @@ class Aimbot:
                     logger.info("配置变更需要重启服务")
                 # 重启服务
                 self._restart_service()
+                # 直接返回，不再继续执行当前循环迭代的剩余部分
+                return
             else:
                 if cfg.capture_ai_debug:
                     logger.info("配置变更只需要刷新参数")
@@ -431,7 +449,6 @@ class Aimbot:
         # 需要重启服务的配置项
         restart_keys = [
             'ai_model_name',
-            'ai_model_image_size',
             'ai_device',
             'ai_tracker'
         ]

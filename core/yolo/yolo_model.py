@@ -71,3 +71,13 @@ class YOLOModel(ABC):
             sv.Detections: 处理后的检测结果
         """
         pass
+    
+    @abstractmethod
+    def get_input_size(self):
+        """
+        获取模型输入大小
+        
+        Returns:
+            int: 模型输入大小（正方形）
+        """
+        pass
