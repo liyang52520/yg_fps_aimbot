@@ -3,6 +3,8 @@ import numpy as np
 from typing import Optional, Any
 
 import supervision as sv
+from torch.backends.mkl import verbose
+
 from .yolo_model import YOLOModel
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,7 @@ class UltralyticsYOLOModel(YOLOModel):
                 device = f"cuda:{device}"
             
             # 执行推理（ultralytics库会自动处理不同格式的模型）
-            results = self.model(image, conf=self.conf, device=device, half=True, max_det=3)
+            results = self.model(image, conf=self.conf, device=device, half=True, max_det=3, verbose=False)
             
             # 后处理
             return self.postprocess(results, image.shape)
