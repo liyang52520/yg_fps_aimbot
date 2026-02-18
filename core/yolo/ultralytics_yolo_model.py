@@ -31,7 +31,7 @@ class UltralyticsYOLOModel(YOLOModel):
                 device = f"cuda:{device}"
             
             # 使用ultralytics库加载模型（支持pt、onnx、engine、Openvino等格式）
-            self.model = YOLO(self.model_path)
+            self.model = YOLO(self.model_path, task="detect")
             
             # 获取模型输入大小
             self.input_size = self._get_model_input_size()
@@ -103,7 +103,7 @@ class UltralyticsYOLOModel(YOLOModel):
                 device = f"cuda:{device}"
             
             # 执行推理（ultralytics库会自动处理不同格式的模型）
-            results = self.model(image, conf=self.conf, device=device)
+            results = self.model(image, conf=self.conf, device=device, half=True, max_det=3)
             
             # 后处理
             return self.postprocess(results, image.shape)

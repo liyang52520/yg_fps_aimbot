@@ -46,7 +46,7 @@ class YOLOv5Model(YOLOModel):
                     device=device,
                     dnn=False,
                     data=None,
-                    fp16=False
+                    fp16=True
                 )
                 
                 # 获取模型属性
